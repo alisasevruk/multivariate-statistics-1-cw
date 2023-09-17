@@ -1,0 +1,315 @@
+---
+title: "Lineare Multivariate Statisics.HW"
+author: "Alisa Sevruk"
+date: "2023-04-30"
+output:
+  html_document:
+    df_print: paged
+---
+
+## Aufgabe 1
+
+*Laden Sie den Datensatz "KenyaDHS.txt" herrunter. Lesen Sie die Daten in R ein und bereiten Sie den Datensatz wie folgt vor.*
+
+```{r}
+library(dplyr)
+library(magrittr)
+library(car) #for the Levene test
+
+#impoting the txt file
+data = read.table("data/KenyaDHS.txt",header=T)
+head(data)
+```
+
+### Datensatz
+
+1.  *Behandeln Sie die Ausprägungen "notdejureresident" der Variable water als fehlende Werte und entfernen Sie die entsprechenden Stichproben (also Zeilen) aus dem Datensatz.*
+
+```{r}
+data_clean = data %>% filter(water != "not dejure resident") #cleaning data
+data_clean %>% count(water)
+```
+
+2.  *Für die Variable wealth ersetzen Sie die beiden Ausprägungen poorer, poorest durch poor und die Ausprägungen richer, richest durch rich.*
+
+```{r}
+data_clean %>% count(wealth)
+data_clean[,"wealth"] = data_clean %>% mutate(
+  wealth = if_else(wealth %in% c("poorer", "poorest"), "poor", wealth),
+  wealth = if_else(wealth %in% c("richer", "richest"), "rich", wealth),
+) %>%
+  select(wealth)
+data_clean %>% count(wealth)
+```
+
+3.  *Für die Variable placedelivery ersetzen Sie die Ausprägungen govt. dispensary, govt. health center, govt. hospital, other public durch govt, die Ausprägungen mission hospital/clinic, other private medica, private hosp/clinic durch private und die verbliebenen Ausprägungen durch home.*
+
+```{r}
+data_clean %>% count(placedelivery)
+data_clean[,"placedelivery"] = data_clean %>% mutate(
+  placedelivery = if_else(placedelivery %in% c("govt. dispensary", "govt. health center", "govt. hospital","other public"), "govt", placedelivery),
+   placedelivery = if_else(placedelivery %in% c("mission hospital/clinic", "other private medica", "private hosp/clinic"), "private", placedelivery),
+  placedelivery = if_else(placedelivery %in% c("govt", "private"), placedelivery, "home"),
+  ) %>%
+select(placedelivery)
+data_clean %>% count(placedelivery)
+```
+
+4.  *Für die Variable water ersetzten Sie die Ausprägungen bottled water, piped into compound/plot, piped into dwelling, public tap durch piped, die Ausprägungen covered public well, covered well in compound/plot, open public well, open well in com- pound/plot durch well und die verbliebenen Ausprägungen durch open.*
+
+```{r}
+data_clean %>% count(water)
+data_clean[,"water"] = data_clean %>% mutate(
+  water = if_else(water %in% c("bottled water", "piped into compound/plot", "piped into dwelling","public tap"), "piped", water),
+   water = if_else(water %in% c("covered public well", "covered well in compound/plot", "open public well", "open well in compound/plot"), "well", water),
+  water = if_else(water %in% c("piped", "well"), water, "open"),
+  ) %>%
+select(water)
+data_clean %>% count(water)
+```
+
+Die fehlenden Werte im Datensatz werden automatisch von aov entfernt.
+
+### Aufgaben
+
+1.  *Führen Sie zuerst eine einfaktorielle Varianzanalyse für childweight mit dem Faktor water durch. Stellen Sie die Hypothesen auf und kommentieren Sie das Ergebnis. Überprüfen Sie alle Annahmen einer einfaktoriellen Varianzanalyse. Gibt es Annahme(n), die verletzt sind? Führen Sie einen nicht-parmetrischen Kruskall- Wallis-Test durch. Wie lautet die Nullhypothese von diesem Test? Unterscheidet sich das Ergebnis dieses Tests von der Varianzanalyse? Führen Sie einen Tukey- Test durch, um zu überprüfen welche Paare der Faktorenausprägungen signifikant sind. Sind alle Annahmen dieses Testes erfüllt? Interpretieren Sie das Ergebnis. (6 Punkte)*
+
+```{r}
+# Get the unique water values
+w = levels(factor(data_clean[,"water"]))
+
+# Build 3 groups of childweight according to water source
+cw_piped = data_clean[data_clean[,"water"] == w[1], "childweight"]
+cw_open = data_clean[data_clean[,"water"] == w[2], "childweight"]
+cw_well = data_clean[data_clean[,"water"] == w[3], "childweight"]
+
+# Combine variables and set corresponding factors
+CW = c(cw_piped, cw_open, cw_well)
+F = factor(c(rep(w[1], length(cw_piped)), rep(w[2], length(cw_open)), rep(w[3], length(cw_well))))
+
+plot(sort(unique(F)), tapply(CW, F, mean)) # Compare means
+boxplot(cw_piped, cw_open, cw_well) # Compare boxplots
+
+CW.aov = aov(CW ~ F) # Analysis of variance
+summary(CW.aov)
+```
+
+The null hypothesis (H0) states that there is no significant difference between the means of the groups being compared. The alternative hypothesis (H1) states that at least one of the group means is significantly different from the others. t
+
+The p-value associated with the F-statistic is 4.46e-07 (or 0.000000446), which is less than the commonly used significance level of 0.05. This indicates that the probability of observing an F-statistic as extreme or more extreme than the one calculated, assuming the null hypothesis is true, is very low.
+
+Since the p-value is less than 0.05, we reject the null hypothesis (H0). This means that there is a significant difference between the means of at least one group compared to the others, and we have enough evidence to support the alternative hypothesis (H1).
+
+```{r}
+hist(resid(CW.aov))
+qqnorm(resid(CW.aov)); qqline(resid(CW.aov))  # Check normality of the residuals
+
+c(var(cw_piped), var(cw_open), var(cw_well))
+leveneTest(CW.aov, center = mean)  # Check equality of variances
+```
+
+In the Levene's test, we examine the equality of variances across all groups. If the p-value from the test is less than 0.05, we reject the null hypothesis, which states that the variances are equal across all groups, and conclude that there is a significant difference among the group variances. In this case, with a p-value of 0.01381, we have evidence to indicate that the variances are not equal across groups, violating the homoscedasticity assumption. Consequently, we can perform a non-parametric Kruskal-Wallis test. Regarding the normality of residuals, the data points deviate only at the ends from the diagonal line and do not form a straight line; however, the distribution can be considered approximately normal, and thus the normality assumption is not violated for this group. Lastly, the residuals plot resembles a bell curve, indicating that the normality assumption is met for the data.
+
+```{r}
+kruskal_wallis_result = kruskal.test(CW ~ F)
+kruskal_wallis_result
+```
+
+\
+The Kruskal-Wallis test is used to analyze the differences among group medians. In this case, the null hypothesis states that the medians of all groups are equal, while the alternative hypothesis suggests that at least one group has a different median. When the p-value is greater than 0.05, we fail to reject the null hypothesis, indicating that there is no significant difference in the medians of the groups. Consequently, we can assume that the type of water source, whether it be open, piped, or well, does not have a significant impact on child weight. Here again, we reject the null hypothesis. It is important to note that these findings differ from those of the Levene's test. To further explore the differences between groups, we can proceed with a Tukey's test.
+
+```{r}
+tukey_result = TukeyHSD(CW.aov)
+tukey_result
+```
+
+When comparing pairs of groups, if the p-value is less than 0.05 and the confidence interval does not include zero, it indicates a significant difference between those groups. In this case, the significant differences are observed between the following pairs: piped-open and well-piped.
+
+2.  *Betrachten Sie den Einfluss der Faktoren water und wealth auf das childweight. Erstellen Sie entsprechende Interaktionsplots. Sprechen diese Plots für einen signifikanten Interaktionseffekt? Führen Sie eine zweifaktorielle Varianzanalyse durch. Ist der Interaktionseffekt signifikant? Was können Sie über die einzelnen Effekte von water und wealth sagen? Überprüfen Sie alle Annahmen einer zweifaktoriellen Varianzanalyse und kommentieren Sie das Ergebnis. (4 Punkte)*
+
+```{r}
+# Build variables
+childweight_groups <- list()
+F1 <- NULL
+F2 <- NULL
+
+
+for (w in levels(factor(data_clean$wealth))) {
+  for (wa in levels(factor(data_clean$water))) {
+    childweight_groups[[paste(w, wa, sep = "_")]] <- data_clean$childweight[data_clean$wealth == w & data_clean$water == wa]
+    len <- length(data_clean$childweight[data_clean$wealth == w & data_clean$water == wa])
+    F1 <- c(F1, rep(w, len))
+    F2 <- c(F2, rep(wa, len))
+  }
+}
+
+# Combine variables and set corresponding factors
+CW1 <- unlist(childweight_groups)
+F1 <- factor(F1)
+F2 <- factor(F2)
+
+# Interaction plots
+interaction.plot(F1, F2, CW1)
+interaction.plot(F2, F1, CW1)
+```
+
+We can see in the plots that the wealth levels have a significant influence on the child weight, while the water levels do not as much. Further, they point towards the idea that the interactioneffect might not be significant.
+
+```{r}
+# Two-way ANOVA for childweight with water and wealth factors
+CW1.aov <- aov(CW1 ~ F1 * F2)
+summary(CW1.aov)
+```
+
+We can see that only the factor of wealth is significant, while water is not playing a significant role when it comes to the influence on the weight of the ghild. Further, the interaction effect does not seem to be significant. This confirms the observation made from the plots.
+
+```{r}
+hist(resid(CW1.aov))
+qqnorm(resid(CW1.aov))
+qqline(resid(CW1.aov))  
+
+leveneTest(CW1.aov,center=mean)
+```
+
+Again, in the Levene's test we are facing a p-value smaller then 0.05, namely 0.02841. Therefore we again have evidence to indicate that the variances are not equal across groups, violating the homoscedasticity assumption. Regarding the normality of residuals, the data points again deviate only at the ends from the diagonal line and do not form a straight line; however, the distribution can be considered approximately normal, and thus the normality assumption is not violated for this group. Lastly, the residuals plot resembles a bell curve, indicating that the normality assumption is met for the data.
+
+3.  *Betrachten Sie nun den Einfluss der Faktoren water und placedelivery auf childweight. Erstellen Sie entsprechendene Interaktions-Plots. Sprechen diese Plots für einen signifikanten Interaktionseffekt? Führen Sie eine zweifaktorielle Varianzanalyse für childweight und die Faktoren water und placedelivery durch. Ist der Interaktionseffekt signifikant? Was können Sie in diesem Fall über einzelne Effekte sagen? Überprüfen Sie alle Annahmen einer zweifaktoriellen Varianzanalyse und kommentieren Sie das Ergebnis. Führen Sie einen Tukey-Test durch, um zu überprüfen welche Paare der Interaktionseffekte signifikant sind. Sind die Annahmen dieses Tests erfült? Listen Sie fünf Paare der Interaktionseffekte, die den kleinsten p−Wert haben und interpretieren Sie diese. (6 Punkte)*
+
+```{r}
+# Build variables
+childweight_groups <- list()
+F1 <- NULL
+F2 <- NULL
+
+for (pd in levels(factor(data_clean$placedelivery))) {
+  for (wa in levels(factor(data_clean$water))) {
+    childweight_groups[[paste(pd, wa, sep = "_")]] <- data_clean$childweight[data_clean$placedelivery == pd & data_clean$water == wa]
+    len <- length(data_clean$childweight[data_clean$placedelivery == pd & data_clean$water == wa])
+    F1 <- c(F1, rep(pd, len))
+    F2 <- c(F2, rep(wa, len))
+  }
+}
+
+# Combine variables and set corresponding factors
+CW2 <- unlist(childweight_groups)
+F1 <- factor(F1)
+F2 <- factor(F2)
+
+# Interaction plots
+interaction.plot(F1, F2, CW2)
+interaction.plot(F2, F1, CW2)
+```
+
+The plot point to similar assuptions as before.
+
+```{r}
+# Two-way ANOVA for childweight with water and wealth factors
+CW2.aov <- aov(CW2 ~ F1 * F2)
+summary(CW2.aov)
+```
+
+In contrary to the plots, the ANOVA yields different rsults. Now the interaction effect is significant. A significant interaction effect suggests that the relationship between "water" and the child weight depends on the level of "placedelivery" and vice versa. In this case, it is difficult to make meaningful statements about the isolated effects of "water" and "placedelivery" without considering their interaction.
+
+```{r}
+hist(resid(CW2.aov))
+qqnorm(resid(CW2.aov))
+qqline(resid(CW2.aov))  
+
+leveneTest(CW2.aov,center=mean)
+```
+
+Again, in the Levene's test we are facing a p-value smaller then 0.05, namely 0.02791. Therefore we again have evidence to indicate that the variances are not equal across groups, violating the homoscedasticity assumption. Regarding the normality of residuals, the data points again deviate only at the ends from the diagonal line and do not form a straight line; however, the distribution can be considered approximately normal, and thus the normality assumption is not violated for this group. Lastly, the residuals plot resembles a bell curve, indicating that the normality assumption is met for the data.
+
+```{r}
+tukey_result <- TukeyHSD(CW2.aov)
+tukey_result
+
+# Convert the TukeyHSD results into a data frame
+tukey_df <- data.frame(tukey_result$`F1:F2`)
+
+# Order the data frame by the p-values in ascending order
+ordered_tukey_df <- tukey_df[order(tukey_df$p.adj),]
+
+# Select the top 5 rows with the smallest p-values
+top_5_pairs <- head(ordered_tukey_df, 5)
+
+# Print the top 5 pairs
+print(top_5_pairs)
+```
+
+All pairs, which have a p-value below 0.05 are significant. Since the p-value of the Levene's test is less than the commonly used significance level of 0.05, it suggests that the assumption of homoscedasticity is violated. This means that the Tukey test may not be appropriate for your data due to the violation of the equal variances assumption.
+
+## Aufgabe 2
+
+### Datensatz
+
+*Laden Sie den Datensatz "kidney.csv" herrunter. Die Variablenbeschreibung finden Sie unter UCI Machine Learning Repository. Lesen Sie die Daten in R ein. Der Datensatz enthält 11 numerische Variablen und 14 nominalskalierte Variablen. Zuerst entfernen Sie aus dem Datensatz alle Stichproben (also Zeilen) mit den fehlenden Werten. Anschließend, nehmen Sie nur die 11 numerischen Variablen für die Analyse (Spalten 2,3 und von 11 bis 19).*
+
+```{r}
+kidney <- read.csv("data/kidney.csv")
+kidney <- na.omit(kidney)
+X <- kidney[, c(2,3,11,12,13,14,15,16,17,18,19)] # we take only certain 11 numbers 
+```
+
+### Aufgaben
+
+1.  *Erklären Sie, warum die Hauptkomponentenanalyse auf der Kovarianzmatrix für diese Daten nicht sinnvoll ist. Führen Sie eine Hauptkomponentenanalyse auf der Korrelationsmatrix durch. Beschreiben Sie die ersten zwei empirischen Hauptkom- ponenten und interpretieren Sie diese. Wie viel der gesamten Varianz erklären die ersten beiden Hauptkomponenten? (5 Punkte)*
+
+```{r}
+cov(X)
+diag(cov(X))
+```
+
+When looking at the values of the connivance matrix we observe that the entries along wc are by far the most dominant. Therefore, a Principle Component Analysis would be not a good idea, as the situation violates the underlying assumption of having all features on a similar scale.
+
+```{r}
+prcomp(X, scale = TRUE)
+```
+
+The most influential variables for PC1 are 'bu' (0.3750), 'sc' (0.3767), and 'hemo' (-0.4134). These three variables have the largest absolute loadings, indicating that they contribute the most to PC1. 'bu' and 'sc' have positive loadings, meaning that as they increase, the PC1 score also increases. In contrast, 'hemo' has a negative loading, indicating that as it increases, the PC1 score decreases. PC1 can be interpreted as a linear combination of these three variables, with 'bu' and 'sc' having a positive effect, and 'hemo' having a negative effect.
+
+The most influential variables for PC2 are 'age' (-0.4393), 'bgr' (-0.3687), and 'wc' (-0.5781). These variables have the largest absolute loadings for PC2, indicating that they are the most important contributors to this component. All three variables have negative loadings, which means that as they increase, the PC2 score decreases. PC2 can be interpreted as a linear combination of these three variables, with 'age', 'bgr', and 'wc' all having a negative effect.
+
+```{r}
+sigma = prcomp(X, scale=TRUE)$sdev^2
+sigma/sum(sigma)
+sum((sigma/sum(sigma))[1:2])
+```
+
+About 55% of the total variance is due to the first two principle components.
+
+2.  *Plotten Sie die erste und die zweite empirische Hauptkomponente(Scores) gegen einander und markieren Sie jeden Punkt mit der Variable class, also, ob der Patient eine chronische Nierenerkrankung hat oder nicht. Was fällt Ihnen auf? (2 Punkte)*
+
+```{r}
+col <- ifelse(kidney$classification=="ckd", "red", "green")
+pca.x <- prcomp(X, scale = TRUE)$x
+plot(pca.x[,1], pca.x[,2], xlab = "PC1", ylab = "PC2",
+     xlim = c(min(pca.x[,1]), max(pca.x[,1])), col=col, pch=16)
+legend(4,0,legend=c("yes", "no"), fill = c("red", "green"),
+       title="chronische Nierenerkrankung")
+```
+
+In the plot we can see that the people with and without the chronic kidney disease can be separated perfectly into two clusters with only a few data points of the positive cases touching the cluster of the negative ones. Further, the clusters can be separated by a line along the y axis (PC2) and their spread is limited in the y axis (PC2) direction and similar except a few outliers, while the spread of the positive group is more far then the of the negative one along the x axis (PC1). As we saw earlier, the PC1 is the cause for 43% of the variance, while the PC2 only can be accounted for 12%. Therefore, we must notice that a difference along the x axis (PC1) is of higher significance.
+
+3.  *Führen Sie nun eine Faktorenanalyse mit 2 Faktoren durch, indem Sie das Modell mit der Maximum- Likelihood-Methode schätzen, keine Rotation benutzen und die Faktorenwerte mit dem Thomson- Schätzer bestimmen. Schreiben Sie das geschätzte Modell auf und erklären Sie alle Werte im R-Output. Beschreiben Sie die beiden Scores und interpretieren Sie diese. Vergleichen Sie diese mit den ersten zwei empirischen Hauptkomponenten aus Teilaufgabe 1. Sind 2 Faktoren für das Modell ausre- ichend? Warum? Plotten Sie den ersten und den zweiten Score gegeneinander und markieren Sie jeden Punkt mit der Variable class. Vergleichen Sie das Ergebnis mit dem Plot aus Punkt 2. Kommentieren Sie die Unterschiede, wenn vorhanden.*
+
+```{r}
+library(psych)
+
+X.mle <- fa(X, nfactors=2, score="regression", rotate = "none", fm="mle")
+X.mle #factor is worth keeping if SS>1 (Kaiser's rule) #recall: L=cov(x,f)!
+X.mle$PVAL
+```
+According to Kaiser's rule, both factors in the model are important, as their SS-loadings are both greater than 1. Further, we can see that the variance can be explained through the first factor as of 32% and the second factor as of 14%. With 0.177 the p-value is smaller then 0.05 and thus the null hypothesis that 2 factors are sufficient is accepted.
+
+```{r}
+col <- ifelse(kidney$classification=="ckd", "red", "green")
+X.score <- X.mle$scores
+plot(X.score[,1:2], xlab= "PC1", ylab= "PC2",
+     xlim = c(min(X.score[,1]), max(X.score[,1])), col=col, pch=16)
+legend(2.5,-1, legend=c("yes", "no"), fill = c("red", "green"),
+       title="chronische Nierenerkrankung")
+```
+
+Again, the positive and negative cases can be seperated into two clusters. As before we notice a more dense situated data in the negative cluster, while in the positive one the data has a higher spread (or variance). Further, we can observe a key difference in the type of the seperation needed, as before a simple line along the y axs was enough, we now need to seperate more sophisticated to make sure there are no outliers in the negative cluster. If we are not too focused on perfection though, again a simple line would do the job. Onother difference is that the close outlines
+of the positive cases are now definitely seperable from the negative ones. As a last comment, the spread along the y axis has increased.
