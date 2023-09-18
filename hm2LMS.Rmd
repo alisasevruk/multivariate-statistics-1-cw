@@ -1,0 +1,411 @@
+---
+title: "LMS_2"
+author: "Alisa Sevruk"
+date: "2023-06-16"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# Aufgaben zur Hausarbeit 2
+
+## Aufgabe 1
+
+### Datensatz
+
+Laden Sie den Datensatz "glass.txt" herunter. Weitere Informationen zum Datensatz und allen Variablen finden Sie auf UCI Machine Learning Repository. Lesen Sie den Datensatz in R ein. Führen Sie eine Hauptkomponentenanalyse auf einer Korrelationsmatrix der Daten ohne Variable Type durch. Die ersten zwei empirischen Hauptkomponenten werden nun für die Diskriminanzanalyse benutzt.
+
+```{r}
+# imports
+library(psych)
+library(MASS)
+library(klaR)
+library(dplyr)
+
+data = read.table("data/glass.txt",header=T)
+attach(data)
+
+# pca without Type
+X = data.matrix(data[,c(1:9)])
+# pca <- princomp(X,cor=TRUE)
+pca <- prcomp(X, scale. = TRUE)
+
+# first and second component
+# pca_components <- pca$scores[,1:2]
+pca_components <- pca$x[,1:2]
+
+data$PC1 = pca_components[,1]
+data$PC2 = pca_components[,2]
+
+# Performing Linear Discriminant Analysis
+# lda.fit = lda(Type ~ PC1 + PC2, data = data)
+# lda.fit
+
+# plot(lda.fit, col = as.integer(data$Type))
+# plot(lda.fit, dimen = 1, type = "b")
+
+# partimat(as.factor(Type) ~ PC1 + PC2,method="lda",data=data)
+```
+
+1.  Man möchte eine Entscheidungsregel finden, die anhand der ersten zwei empirischen Hauptkomponenten bestimmt, ob das Glas ein Fensterglas (Type 1 bis 3) ist oder nicht (Type 5 bis 7). Plotten Sie die beiden empirischen Hauptkomponenten gegeneinander, markieren Sie jeden Punkt mit dem Glastyp (Fensterglas oder nicht) und beschreiben Sie das Ergebnis. Sind die empirischen Hauptkomponenten dazu geeignet, die beide Glastypen zu unterscheiden? Anschließend testen Sie, ob die Erwartungswerte der beiden Klassen sich signifikant unterscheiden.
+
+```{r}
+# Fensterglas
+data$Fensterglas <- ifelse(data$Type %in% 1:3, 1, 0)  # 1 für Fensterglas, 0 für kein Fensterglas
+plot(data$PC1, data$PC2, col = ifelse(data$Fensterglas == 1, "red", "blue"), xlab = "1. Hauptkomponente", ylab = "2. Hauptkomponente", main = "Verteilung der Glastypen nach den ersten beiden Hauptkomponenten")
+legend("bottomleft", legend = c("Fensterglas", "Kein Fensterglas"), fill = c("red", "blue"))
+
+```
+
+Auf dem Diagramm, das die erste Hauptkomponente gegen die zweite Hauptkomponente darstellt, lässt sich erkennen, dass die Datenpunkte der Kategorie Fensterglas um den Koordinatenpunkt (0\|-1) konzentriert sind. Diese Datenpunkte weisen eine horizontale Ausbreitung von etwa 2 und eine vertikale Ausbreitung von etwa 1 auf. Auffällig sind Ausreißer der Fensterglas-Klasse, die sich entlang der Diagonalen in Richtung des oberen linken Bereichs erstrecken.
+
+Die Kategorie "kein Fensterglas" weist hingegen eine Datenpunktsammlung um den Punkt (2\|3) auf, welche sich etwa um 1 sowohl entlang der X- als auch der Y-Achse erstreckt. Dabei stellt diese Sammlung lediglich die Hälfte aller Datenpunkte der "kein Fensterglas"-Kategorie dar, während die Fensterglas-Kategorie eine klare Mehrheit in ihrer Datenpunktsammlung konzentriert. Darüber hinaus dehnen sich Datenpunkte der Kategorie "kein Fensterglas" auch nach links und rechts unten aus und überlappen mit den Ausreißern der Fensterglas-Kategorie in der Nähe deren Anhäufung.
+
+Frage: Sind die empirischen Hauptkomponenten dazu geeignet, die beide Glastypen zu unterscheiden?
+
+Antwort: Auf des Diagramms lässt sich schlussfolgern, dass die empirischen Hauptkomponenten eine gewisse Trennung zwischen den beiden Glastypen ermöglichen. Jedoch ist diese Trennung nicht eindeutig.
+
+Die Konzentration der Datenpunkte von Fensterglas und kein Fensterglas in unterschiedlichen Bereichen des Diagramms zeigt, dass es bestimmte Muster in den Daten gibt, die mit den Glastypen zusammenhängen. Doch die Überlappung der Ausreißer und einige Datenpunkte der "kein Fensterglas"-Klasse mit der Fensterglas-Klasse deutet darauf hin, dass die Unterscheidung zwischen den beiden Klassen nicht immer klar ist.
+
+Zusätzlich zeigt die erhebliche Anzahl an Datenpunkten außerhalb der zentralen Ansammlungen für beide Klassen (besonders bei der "kein Fensterglas"-Klasse), dass es eine erhebliche Variabilität innerhalb jeder Klasse gibt. Dies könnte die Fähigkeit der Hauptkomponenten, die beiden Glastypen zuverlässig zu unterscheiden, weiter einschränken.
+
+Daher scheinen die empirischen Hauptkomponenten zwar einige Unterscheidungsmerkmale zu liefern, doch für eine zuverlässige und eindeutige Unterscheidung zwischen Fensterglas und kein Fensterglas könnten weitere Daten oder eine komplexere Analysemethode erforderlich sein.
+
+```{r}
+# F-Test for alpha = 0.05
+n1 = sum(data$Fensterglas == 1)
+n2 = sum(data$Fensterglas == 0)
+n = n1 + n2
+
+# Überprüfen Sie die Stichprobenmittelwerte
+mu.hat1 = c(mean(data$PC1[data$Fensterglas == 1]), mean(data$PC2[data$Fensterglas == 1]))
+mu.hat2 = c(mean(data$PC1[data$Fensterglas == 0]), mean(data$PC2[data$Fensterglas == 0]))
+
+# Formalen Test durchführen
+Sigma.hat = ((n1 - 1) * cov(data[c("PC1", "PC2")][data$Fensterglas == 1, ]) + 
+             (n2 - 1) * cov(data[c("PC1", "PC2")][data$Fensterglas == 0, ])) / (n - 2)
+
+D = t(mu.hat1 - mu.hat2) %*% solve(Sigma.hat) %*% (mu.hat1 - mu.hat2)
+F = ((n1 + n2 - 3) * n1 * n2 * D) / ((n1 + n2) * (n1 + n2 - 2) * 2)
+F
+
+critical_val = qf(0.95, 2, n1 + n2 - 3)
+F > critical_val
+```
+
+Um zu überprüfen, ob die durchschnittlichen Werte der beiden Glastypen sich signifikant voneinander abheben, setzen wir voraus, dass unsere Daten ungefähr eine Normalverteilung aufweisen. Wir wenden dabei die Hotelling's T\^2-Statistik an, die wir in eine F-Statistik umwandeln und mit dem Schwellenwert für die Signifikanzstufe $\alpha = 0.05$ vergleichen. Unsere Nullhypothese postuliert, dass die Durchschnittswerte gleich sind. Da unser Test diese Hypothese ablehnt, bestätigt das unsere Vermutung, dass die beiden ersten Hauptkomponenten eine effektive Trennung der beiden Glastypen ermöglichen.
+
+2.  Führen Sie eine lineare Diskriminanzanalyse mit den Bayes- und Maximum-Likelihood-Entscheidungsregeln durch und berechnen Sie die entsprechenden Resubstitutionsfehler. Welche Entscheidungsregel hat den kleineren Resubstitutionsfehler? Stellen Sie das Ergebnis der Diskriminanzanalyse nach den beiden Methoden graphisch dar, vergleichen Sie die Ergebnisse und interpretieren Sie diese.
+
+```{r}
+## Analyse
+# LDA
+lda.fit = lda(Fensterglas ~ PC1 + PC2, data = data)
+lda.fit
+plot(lda.fit, col = as.integer(data$Type))
+
+# ML
+a=as.vector(solve(Sigma.hat)%*%(mu.hat1-mu.hat2))
+b=as.vector((mu.hat1+mu.hat2)%*%solve(Sigma.hat)%*%(mu.hat1-mu.hat2)/2)
+
+## Plots of results
+# LDA 
+partimat(as.factor(Fensterglas) ~ PC2+PC1, method="lda",prec=100,data=data)
+
+# ML
+plot(data$PC1,data$PC2,pch=18)
+points(data$PC1[1:n1],data$PC2[1:n1],col=2,pch=18)
+
+xx1=seq(-10,8,length=100)
+d=b/a[2]-xx1*a[1]/a[2]  #same for const*a
+lines(xx1,d,lwd=3)
+
+## Classification errors 
+# LDA
+CM.bayes=table(predicted=predict(lda.fit)$class, actual=as.factor(data$Fensterglas)) #confusion matrix from lda
+CM.bayes
+1-sum(diag(CM.bayes))/sum(CM.bayes)
+
+# ML
+pred=rep(1,n)
+pred[b/a[2]-data$PC1*a[1]/a[2]<=data$PC2]=0
+CM.mle=table(predicted=pred,actual=as.factor(data$Fensterglas))#confusion matrix for ML-decision
+CM.mle
+1-sum(diag(CM.mle))/sum(CM.mle)
+```
+
+Die Entscheidungsregel der Maximum-Likelihood-Methode liefert einen geringeren Resubstitutionsfehler im Vergleich zur Bayes-Methode (0.0654 im Vergleich zu 0.0748). Durch die graphische Darstellung der Ergebnisse beider Methoden können wir einen visuellen Vergleich durchführen. Wie durch die Resubstitutionsfehler bereits angedeutet, zeigen beide Methoden sehr ähnliche Resultate. Der einzige bemerkbare Unterschied zwischen den beiden liegt in einer geringfügigen Anpassung der affinen Trennungslinie hinsichtlich Steigung und Y-Achsenabschnitt.
+
+3.  Bestimmen Sie nun eine Entscheidungsregel, die berücksichtigt, dass $C(\varepsilon_{1|2})/C(\varepsilon_{2|1}) = \frac{1}{4}$, wobei $C(\varepsilon_{i|j})$ die Kosten des Ereignisses $\varepsilon_{i|j}$, $i,j = 1,2$ sind. Klasse 1 entspricht dem Fensterglas. Rechnen Sie den entsprechenden Resubstitutionsfehler aus und vergleichen Sie diesen mit den Resubstitutionsfehlern aus Punkt 2. Beschreiben Sie die Ereignisse $\varepsilon_{i|j}$, $i,j = 1,2$ und interpretieren Sie $C(\varepsilon_{1|2})/C(\varepsilon_{2|1}) = \frac{1}{4}$
+
+Die Kosten für diese Fehlklassifikationen werden durch $C(\varepsilon_{1|2})$ bzw. $C(\varepsilon_{2|1})$ repräsentiert. Die Aussage $C(\varepsilon_{1|2})/C(\varepsilon_{2|1}) = \frac{1}{4}$ besagt, dass die Kosten für das fälschliche Klassifizieren eines Fensterglases als Nicht-Fensterglas viermal niedriger sind als die Kosten für das fälschliche Klassifizieren eines Nicht-Fensterglases als Fensterglas.
+
+Nun werden wir die Entscheidungsregel entsprechend dieser Kostenstruktur anpassen. Der Code könnte folgendermaßen aussehen:
+
+```{r}
+pi1 = n1/n
+pi2 = n2/n
+
+
+# LDA
+# Estimate the prior probabilities
+prior_probs <- c(4/5, 1/5)
+
+# Perform LDA with the specified prior probabilities
+lda_bayes <- lda(Fensterglas ~ PC1 + PC2, data = data, prior = prior_probs)
+
+# Get the predicted classes
+predictions_bayes <- predict(lda_bayes)$class
+
+# Compute the confusion matrix
+CM.bayes2 <- table(Predicted = predictions_bayes, Actual = data$Fensterglas)
+CM.bayes2
+
+# Compute the resubstitution error rate
+1 - sum(diag(CM.bayes2)) / sum(CM.bayes2)
+
+# Plot
+c = 1/4
+d=b/a[2]-xx1*a[1]/a[2]  #same for const*a
+d.bayes <- b / a[2] - log(pi1/pi2) / a[2] - xx1*a[1]/a[2]
+d.cost <- b / a[2] - log(c * pi2/pi1) / a[2] - xx1*a[1]/a[2]
+
+plot(data$PC1,data$PC2,pch=18)
+points(data$PC1[1:n1],data$PC2[1:n1],col=2,pch=18)
+lines(xx1,d,lwd=3, col=1)
+lines(xx1,d.bayes,lwd=3, col=2)
+lines(xx1,d.cost,lwd=3, col=3)
+legend("bottomleft", legend = c("ML", "Bayes", "Kostenber."), col=c(1,2,3), lty=1, lwd=1)
+
+# ML 
+# Berechnen Sie den Schwellenwert unter Berücksichtigung der Kosten
+threshold <- b / a[2] - log(c * pi2/pi1) / a[2]
+
+# Klassifizieren Sie jeden Punkt nach der angepassten Entscheidungsregel
+pred_adj = rep(1, n)
+pred_adj[threshold-data$PC1*a[1]/a[2]<=data$PC2]=0
+
+# Berechnen Sie den angepassten Resubstitutionsfehler
+CM.mle2=table(predicted=pred_adj,actual=as.factor(data$Fensterglas))#confusion matrix for ML-decision
+CM.mle2
+
+1-sum(diag(CM.mle2))/sum(CM.mle2)
+```
+
+Durch die Anpassung der Entscheidungsregel, bekommen wir nun neue Confusion Matizen. Die Confusion Matrix der Bayes-Entscheidungsregel ist nun balanziert zwischen den beiden Fehlern $\varepsilon_{1|2}$ und $\varepsilon_{2|1}$. Der Resubstitutionfehler ist hingegen weiterhin gleich, da nur die Balanz abgeändert wurde. Ausserdem wurde Genauigkeit der Nicht-Fensterklasse (43 vs. 36) verschoben, während die Genauigkeit der Fensterglas gefallen ist (155 vs. 162) sich verschlechtert. Bei der Maximum Likelihood Entscheidungsregel ist die Balanz übergeschlagen und sorgt nun auch für einen höhren Resubstitutionsfehler, welcher näher om Fehler von der Bayes-Entscheidungsregel liegt. Auf der anderen Seite ist nun die Genauigkeit der Nicht-Fensterklasse (46 vs. 40) gestiegen, während die Genauigkeit der Fensterglas gefallen ist (153 vs. 160). Dies ist auch im Plot zu erkennen, wo die Linie im Gunsten zur Nicht-Fensterglas Klasser verschoben wurde.
+
+4.  Bei der linearen Diskriminanzanalyse wird angenommen, dass die Kovarianzmatrizen der beiden Klassen identisch sind. Ist diese Annahme für die vorliegenden Daten sinnvoll? Führen Sie die quadratische Diskriminanzanalyse mit der Bayes-Entscheidungsregel durch, berechnen Sie den Resubstitutionsfehler und stellen Sie das Ergebnis graphisch dar. Interpretieren Sie das Ergebnis.
+
+```{r}
+attach(data)
+cov(data[Fensterglas==0, 11:12])
+cov(data[Fensterglas==1, 11:12])
+```
+
+Kovarianzmatrizen sind nicht identisch. Sowohl die Werte auf der Diagonalen (die Varianzen der Hauptkomponenten) als auch die Werte außerhalb der Diagonalen (die Kovarianzen zwischen den Hauptkomponenten) unterscheiden sich für die beiden Klassen. Dies deutet darauf hin, dass die Variabilität und die Beziehung zwischen den Hauptkomponenten in den beiden Klassen nicht gleich sind.
+
+Daher scheint die Annahme, dass die Kovarianzmatrizen der beiden Klassen identisch sind, für diese Daten nicht zutreffend zu sein. Bei der Anwendung der linearen Diskriminanzanalyse sollte daher berücksichtigt werden, dass diese Annahme möglicherweise eine Einschränkung darstellt und die Genauigkeit des Modells beeinflussen könnte.
+
+```{r}
+qda.fit=qda(Fensterglas~PC1+PC2, data=data)
+qda.fit
+# plot
+partimat(as.factor(Fensterglas) ~ PC2+PC1, method="qda", data=data)
+#error
+CM.qda=table(predicted=predict(qda.fit)$class,actual=as.factor(Fensterglas))
+CM.qda
+1-sum(diag(CM.qda))/sum(CM.qda)  #apparent error rate
+```
+
+Die quadratische Diskriminanzanalyse liefert etwas bessere Ergebnisse, als die beiden vorherigen Methoden. Wir erreichen einen Resbustitutionsfehler von 0.061, entgegen 0.075 für die lineare Diskriminanzanalyse. Wieder ist zu sehen, dass die Error nicht ausbnalanziert sind, was auch an der Gewichtung der Klassen liegen kann. Die graphsiche Darstellung zeigt, dass durch die quadratische Form, die Datenpunkte etwas besser getroffen werden können. Auf der anderen Seite, wird nun die Region link-unten von der Fensterglas Klasse exkludiert, welche momentan keine Einwirkung hat, aber im Fall von zusätzlichen Daten eine erhebliche Rolle spielen könnte.
+
+5.  Nun möchte man eine Entscheidungsregel finden, die anhand der ersten zwei empirischen Hauptkomponenten zwischen Fensterglas (Typ 1 bis 3), Geschirrglas (Typ 5 und 6) und Scheinwerferglas (Typ 7) unterscheidet. Plotten Sie die beiden empirischen Hauptkomponenten gegeneinander und markieren Sie jeden Punkt mit dem Glastyp (Fensterglas, Geschirrglas und Scheinwerferglas). Kommentieren Sie das Ergebnis. Führen Sie eine lineare Diskriminanzanalyse mit der Bayes-Entscheidungsregel durch, berechnen Sie den entsprechenden Resubstitutionsfehler und stellen Sie das Ergebnis grafisch dar. Interpretieren Sie das Ergebnis. Erklären Sie, was die Stichproben-Diskriminanten sind und plotten Sie diese, indem Sie auch die drei Glastypen auf dem Plot markieren. Vergleichen Sie die Resubstitutionsfehler der quadratischen und linearen Diskriminanzanalyse mit der Bayes-Entscheidungsregel.
+
+```{r}
+color_codes <- c("Fensterglas" = "red", "Geschirrglas" = "green", "Scheinwerferglas" = "blue")
+data$Glas <- case_when(
+  data$Type %in% 1:3 ~ "Fensterglas",
+  data$Type %in% 5:6 ~ "Geschirrglas",
+  data$Type == 7     ~ "Scheinwerferglas"
+)
+plot(data$PC1, data$PC2, col = color_codes[data$Glas], xlab = "1. Hauptkomponente", ylab = "2. Hauptkomponente")
+legend("bottomleft", legend = names(color_codes), fill = color_codes, title = "Glastyp")
+```
+
+Die Klasse "Fensterglas" ist wie in der Aufgabe 1.1 beschrieben. Die vormals als "kein Fensterglas" bezeichnete Klasse teilt sich nun in die beiden Untergruppen "Geschirrglas" und "Scheinwerferglas". Dies hilft dabei, nun die Datenpunktsammlung um den Punkt (2\|3) näher zu untersuchen. Diese ist eine Mehrheits Anhäufung der neuen Klasse Scheinwerferglas. Diese Klasse hat jedoch immer noch einzelne Ausreißer, welche sich bis hin zum Anhäufungspunkt der Klasse Fensterglas ausstrecken. Die Klasse Geschirrglas hingegen ist weniger gut abzutrennen, von den Ausreissern der anderen beiden Klassen. Es ist eine Anhäufung dieser Klasse um den Punkt (-1\|1) zu erkennen, die jedoch weniger ausgeprägt ist als die anderen beiden Klassen. Weiterhin, befinden sich im Datenpunktsammlung der Klasse Geschrirrglas einige Ausreißer der anderen beiden Klassen, was eine eindeutige Abgrenzung verhindert.
+
+```{r}
+#in three dimensions
+lda.fit3=lda(Glas ~ PC1 + PC2, data=data)
+lda.fit3
+
+partimat(as.factor(Glas) ~ PC2+PC1, method="lda",prec=100,data=data)
+
+CM.lda3=table(predicted=predict(lda.fit3)$class, actual=as.factor(data$Glas)) #confusion matrix from lda
+CM.lda3
+
+1-sum(diag(CM.lda3))/sum(CM.lda3)
+```
+
+Der Resubstitutionsfehler, der bei der Verwendung der verfeinerten Glas-Klasse auftritt, ist höher als die Ergebnisse, die wir in der vorherigen Unterscheidung zwischen Fensterglas und Nicht-Fensterglas ermittelt haben (0.107 gegenüber 0.075). Dies ist insbesondere in der Confusion Matrix erkennbar, in der vor allem die Fehlklassifizierung von Geschirrglas hervorsticht. Unsere Analyse zeigt, dass Geschirrglas oft als Fensterglas oder Scheinwerferglas klassifiziert wurde, wenn es sich tatsächlich um Geschirrglas handelte (11 gegenüber 7 gegenüber 4). Dies ist auch in der grafischen Darstellung zu sehen, in der die drei Klassen, insbesondere aufgrund der Streuung der Geschirrglas-Klasse, schwer voneinander zu trennen sind. Wir haben bereits festgestellt, dass das Geschirrglas eine weitreichendere Anhäufung aufweist, was nun die Klassifizierung erschwert. Im Vergleich zum binären Fall versuchen wir nun auch, die Geschirrklasse genauer einzugrenzen, was zu einer leichten Zunahme der Fehlklassifizierung der Fensterglasklasse führt.
+
+```{r}
+# Compute the sample discriminants
+sample_discriminants = predict(lda.fit3)$x
+sample_discriminants
+
+# Plot the sample discriminants
+plot(sample_discriminants[, 2], sample_discriminants[, 1], col = color_codes[data$Glas], xlab = "LD2", ylab = "LD1")
+legend("bottomleft", legend = names(color_codes), fill = color_codes, title = "Glastyp")
+```
+
+Die Zahlen, LD1 und LD2, sind die Werte der ersten beiden linearen Diskriminanten unserer Daten, die durch die Lineare Diskriminantenanalyse berechnet wurden. Jede Zeile entspricht einer anderen Beobachtung und die LD1 und LD2 Werte sind die Koordinaten dieser Beobachtung im neuen Raum, der durch die Diskriminanten definiert ist.
+
+Ein linearer Diskriminant ist eine lineare Kombination der Eingabemerkmale (in diesem Fall die ersten beiden Hauptkomponenten der PCA), die die Klassen am besten voneinander unterscheidet. Die LDA-Methode findet diese, indem sie nach den Vektoren im zugrunde liegenden Raum sucht, die die Varianz zwischen den Klassen maximieren und gleichzeitig die Varianz innerhalb der Klassen minimieren.
+
+Die Interpretation von LD1 und LD2 ist, dass sie die neuen Variablen (Merkmale) sind, die die Klassen am besten trennen. Sie sind die Achsen des neuen Raums, in dem die Daten jetzt liegen. Wir sehen in der Darstellung, wo wir die Daten mit LD1 und LD2 als Achsen plotten, dass die drei Klassen stärker getrennt sind als im ursprünglichen Merkmalsraum (vergleiche mit dem vorherigen Plot von PC1 gegen PC2.
+
+```{r}
+# Perform QDA
+qda.fit <- qda(Glas ~ PC1 + PC2, data = data)
+partimat(as.factor(Glas) ~ PC2+PC1, method="qda",prec=100,data=data)
+
+
+# Get the predicted classes
+predictions_qda <- predict(qda.fit)$class
+
+# Compute the confusion matrix
+CM.qda2 <- table(Predicted = predictions_qda, Actual = data$Glas)
+CM.qda2
+
+# Compute the resubstitution error rate
+1 - sum(diag(CM.qda2)) / sum(CM.qda2)
+```
+
+Wir sehen, dass die quadratische Diskriminantenanalyse einen geringeren Resubstitutionsfehler aufweist als die lineare Variante (0.093 vs. 0.107). Wenn auch kleiner, ist die Verbesserung nicht sehr groß. Dies liegt vorallem daran, dass eine quadratische Form zwar die drei Klassen besser unterscheiden kann, aber nicht das grundlegende Problem der Datenpunkte ausbessert. Wir haben immer noch das Problem, dass einige Datenpunkte der verschiedenen Klassen zu nah bei einander liegen. Selbst eine noch detailiertere Abtrennung der Klassen würde hier Schwierigkeiten haben. Ein Weg, das Ergebnis zu Verbessern wäre hier die Daten, also sprich die ersten beiden Hauptkomponenten zu erweitern.
+
+## Aufgabe 2
+
+### Datensatz
+
+In dieser Aufgabe arbeiten wir weiterhin mit dem Datensatz glass.txt aus Aufgabe 1. Die Klassen (Cluster) sollen anhand der ersten zwei empirischen Hauptkomponenten bestimmt werden.
+
+### Aufgaben
+
+1.  Wenden Sie den k-Means-Algorithmus auf die Daten an, um diese in 2 Klassen aufzuteilen. Erstellen Sie einen Plot, der die Daten und die geschätzten Klassen zeigt. Inwieweit stimmen die Klassen, die Sie mit dem k-Means-Algorithmus bekommen haben, mit den beiden Glastypen aus Aufgabe 1, Punkt 1 (Fensterglas und alle anderen Glastypen) überein? Welchen Resubstitutionsfehler macht der k-Means-Algorithmus? Erstellen Sie auch den Silhouettenplot und kommentieren Sie diesen.
+
+```{r}
+library(cluster)
+library(factoextra)
+
+X = cbind(data$PC1, data$PC2)
+colnames(X)<-c("PC1","PC2")
+
+XS=scale(X)  ##make it scale invariant
+
+# adapt rownames for clustering visualization
+# 1_ is Fensterglas, 0_ non Fensterglas
+rownames(XS) <- ifelse(data$Fensterglas == 1, paste0("1_", 1:length(data$Fensterglas)), paste0("0_", 1:length(data$Fensterglas)))
+
+
+set.seed(123)  # for reproducibility
+##use k-mean clusters (in stats)/ only quantitative data, two classes
+XS.km=kmeans(XS, centers = 2, nstart = 50)
+
+fviz_cluster(XS.km, data = XS)
+
+# compare with original classes
+data$Fensterglas_new <- ifelse(data$Type %in% 1:3, 1, 2)  # 1 für Fensterglas, 2 für kein Fensterglas
+table(Cluster = XS.km$cluster, GlassType = data$Fensterglas_new)
+
+# calculate resubstitution error
+sum(data$Fensterglas_new != as.factor(XS.km$cluster)) / nrow(data)
+```
+
+Der k-Means-Algorithmus lässt uns die ersten beiden Hauptkomponenten Daten in zwei Gruppen clustern. Anhand einer Confusion Matrix für die Cluster sehen wir, dass der Algorithmus die imbalanzierte Daten zum Vorzug der überpräsenten Fensterglas Klasse clustert. Gerade das Verhältnis Fensterglas richtig vs. falsch predicted (162 vs. 1) deutet darauf stark hin, wenn verglichen gegen Nicht-Fensterglas richitg vs. falsch (32 vs. 19). Der Resubstitionsfehler fällt auf grund der guten Performance auf der Fensterglas Klasse relativ gering mit 0.093 aus.
+
+```{r}
+##look at the silhouette
+plot(silhouette(XS.km$cluster, dist(XS,method = "euclidean")))
+```
+
+Der Silhouettenplot zeigt für Cluster 1 (Fensterglas), 181 Beobachtungen und einem durchschnittlichen Silhouettenwert von 0.61 und für das kleinere Cluster 2 (kein Fensterglas), 33 Beobachtungen und einen niedrigeren durchschnittlichen Silhouettenwert von 0.52. Der Peak wird bei cluster 1 bei über 0.70 erreicht und fällt nur leicht ab für den großteil der Daten, was darauf hindeutet, dass die meisten Beobachtungen in diesem Cluster recht gut übereinstimmen. Der Plot fällt jedoch gegen Ende ab, was darauf hindeutet, dass es einige Beobachtungen in diesem Cluster gibt, die nicht so ähnlich wie die anderen sind, was auf eine gewisse Vielfalt innerhalb dieses Clusters oder einige Grenzfälle hinweisen könnte. Bei cluster 2 wird der Peak bei etwas unter 0.70 erreicht und fällt auch gegen Ende ab, was auf ein ähnliches Muster wie bei Cluster 1 hindeutet, aber mit einem größeren Grad an Unähnlichkeit zwischen den Beobachtungen.
+
+Insgesamt liegen die durchschnittlichen Silhouettenwerte für beide Cluster über 0,5, was im Allgemeinen darauf hindeutet, dass eine vernünftige Struktur gefunden wurde. Cluster 1 scheint jedoch eine bessere interne Konsistenz im Vergleich zu Cluster 2 aufzuweisen, da er einen höheren durchschnittlichen Silhouettenwert hat.
+
+Die Abfälle am Ende der Silhouettenplots für beide Cluster legen nahe, dass es in jeder Gruppe einige Beobachtungen gibt, die näher an der anderen Gruppe sind als an ihrer eigenen. Dies könnte potenziell auf einige falsch klassifizierte Beobachtungen hinweisen, oder es könnte einfach widerspiegeln, dass es eine gewisse Überlappung zwischen den beiden Clustern gibt.
+
+2.  Wenden Sie die drei hierarchischen Verfahren (Single, Complete und Average Linkage) auf die Daten an. Plotten Sie die entsprechenden Dendrogramme. Für jede Methode erstellen Sie für 2 Klassen die Silhouettenplots und Plots, die die Daten und die beiden Klassen zeigen. Beschreiben und interpretieren Sie die Ergebnisse. Wie gut können die drei Methoden das Fensterglas unterscheiden? Wie unterscheiden sich die Ergebnisse von denen aus Punkt 1?
+
+```{r}
+XS.s <- agnes(XS,method="single")
+XS.c <- agnes(XS,method="complete")
+XS.a <- agnes(XS,method="average")
+
+# Plotten Sie die Dendrogramme
+pltree(XS.s, hang = -1, main = "Single Linkage")
+rect.hclust(XS.s, k=2, border = 2)
+pltree(XS.s, hang = -1, main = "Complete Linkage")
+rect.hclust(XS.s, k=2, border = 2)
+pltree(XS.a, hang = -1, main = "Average Linkage")
+rect.hclust(XS.a, k=2, border = 2)
+
+# Silhouettenplotten
+XS.s.sub = cutree(XS.s, k=2)
+XS.c.sub = cutree(XS.c, k=2)
+XS.a.sub = cutree(XS.a, k=2)
+
+
+plot(silhouette(XS.s.sub, dist(XS,method = "euclidean")), main = "Silhouette Plot (Single)")
+plot(silhouette(XS.c.sub, dist(XS,method = "euclidean")), main = "Silhouette Plot (Complete)")
+plot(silhouette(XS.a.sub, dist(XS,method = "euclidean")), main = "Silhouette Plot (Average)")
+
+fviz_cluster(list(data = XS, cluster = XS.s.sub)) #plot cluster
+fviz_cluster(list(data = XS, cluster = XS.c.sub)) #plot cluster
+fviz_cluster(list(data = XS, cluster = XS.a.sub)) #plot cluster
+
+# calculate resubstitution error against Fensterglas
+sum(data$Fensterglas_new != as.factor(XS.s.sub)) / nrow(data)
+sum(data$Fensterglas_new != as.factor(XS.c.sub)) / nrow(data)
+sum(data$Fensterglas_new != as.factor(XS.a.sub)) / nrow(data)
+```
+
+Mithilfe der Dendrogramme und Plots lässt sich die Struktur der hierarchischen Verfahren visuell besser verstehen. Es fällt sofort auf, dass die single linkage Methode sich auf das Erkennen eines einzigen Outliers fokussiert, welcher mit relativ grossem Abstand zu den restlichen Punlten auftritt. Der Silhoutenplot zeigt für das große Cluster hier einen guten Peak bei über 0.8 und einem average von 0.66 auf, welches ein klares Zeichen für eine gute Übereinstimmung der Datenpunkte ist. Wir sehen natürlicher weise auch den typischen Effekt von single linkage Clustering, wo der Abstand zwischen Elementen des einen CLusters größer seien können als der Abstand der Cluster selbst. Da das Ergebnis eine möglichst große Eingrenzung der Daten ist, ist das Ergebnis für die Erkennung von Fensterglas nicht zu verwenden, vor allem weil es eher der naiven Methode ähnlet, wo alle Datenpunkte auf die dominierende Klasse verhorgesagt werden.
+
+In der Complete Methode, ist das Verhältnis der Cluster Größen vergleichbar mit den Ergebnissen aus Teil 1. Hingegen sind die Silhoutenergebnisse weniger gut und gerade für das zweite Cluster mit einem kurzen Peak bei ca. 0.5 und einem average von 0.31 eher weniger aussagetreffend. Dies liegr auch an der Methode des complete Linkage, wo die Distanz als die längste zwischen den Clustern definiert ist und eine gravierende Überschneidung stattfindet. Die Visualisierung zeigt, dass das erste Cluster die Datenpunkte mit einer Anhäufung enthält und das zweite Cluster die weiteren, was die Silhoutenplots weiter unterstützt.
+
+Die Average Methode schafft es eine klare Trennung zwischen den mehr angehäuften Datenpunkten und den nach links verschobenen Ausreißern zu finden. Während dies zu besseren Silhoutenergebnissen im Vergleich zu der Single und Complete Methode führt, ist diese Trennung nicht im Sinne der Fensterglas Klasse.
+
+Die Ergebnisse aus Teil 1 scheinen hingegen der hier gefundenen sich auf die Anhäufungen zu konzentrieren und dann weitere hinzuzufügen (kNN).
+
+3.Nehmen Sie an, dass die Daten einer Mischung von zweidimensionalen Normalverteilungen folgen. Benutzen Sie die Funktion Mclust, um die Daten anzupassen. Welches Modell und mit wie vielen Klassen p wurde gewählt? Stellen Sie das Ergebnis graphisch dar und beschreiben Sie es. Schätzen Sie auch ein Modell mit zwei Klassen, stellen Sie dieses graphisch dar und vergleichen Sie das Ergebnis mit dem aus Punkt 1. Ist die Annahme der Normalverteilung für diese Daten sinnvoll?
+
+```{r}
+library(mclust)
+
+X.m=Mclust(XS)
+summary(X.m)
+X.m$BIC #model is chosen based on BIC
+
+X.m$G #optimal number of clusters
+
+# Darstellen der Klassifizierung
+plot(X.m, what = "classification")
+```
+
+Das Modell, Elliptisch, gleiche Form und Volumina (VEV) mit 4 Klassen hat das höchsten Bayesian Information Criterion (BIC) von -812.3 und wurde daher ausgewählt. Die grafische Darstellung zeigt eine gute Aufteilung der Datenstruktur, wobei die Anhäufung der Fensterglas Klasse weiter unterteilt wurde in zwei Clusters. Diese UNterteilung ermöglicht eine bessere Abgrenzung zu den anderen Datenpunkten. Der konzentrierte Anhäufungspunkt der nicht-Fensterglas Klasse oben-links ist ein eigenes Cluster, selches klar isoliert vorliegt. Alle anderen Datenpunkte, die nicht in einem der konzentrierten Bereiche liegen, werden zum vierten Cluster gezählt.
+
+```{r}
+# Modell mit zwei Klassen schätzen
+X.m2 = Mclust(XS, G = 2)
+summary(X.m2)
+plot(X.m2, what = "classification")
+
+data$Fensterglas_new2 <- ifelse(data$Type %in% 1:3, 2, 1)  # 2 für Fensterglas, 1 für kein Fensterglas
+table(Cluster = X.m2$classification, GlassType = data$Fensterglas_new2)
+sum(data$Fensterglas_new2 != as.factor(X.m2$classification)) / nrow(data) # error
+```
+
+Durch die Reduktion der möglichen Klassen auf 2 wird das Cluster der Fensterglas Klasse nun kleiner und konzentrierter. Die außenliegenden Datenpunkte werden zum anderen Cluster gezählt. Dies steht im Gegensatz zu dem Ergebnis aus Teil 1, wo das Cluster der Fensterglas Klasse erweitert vorzufinden war. Dies wird auch wieder in der Confusion Matrix deutlich, wo wir einen erheblichen Anstieg im Prediction Error von der Fensterglas Klasse als Nicht-Fensterglas haben. Der Resubstitionsfehler liegt außerdem mit 0.187 erheblich höher.
+
+Die Annahme nach einer Normalverteilung scheint nicht sinnvoll zu seien, da die Ergebnisse des kNN Clusterings bessere Ergebnisse liefert.
